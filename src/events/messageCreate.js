@@ -144,7 +144,9 @@ async function handleApplicationDecision(message) {
     }
 
     const isApproved = hasApproveKeyword;
-    const statusText = isApproved ? `تم قبول تقديم ${APPROVE_EMOJI}` : `تم رفض تقديم ${DENY_EMOJI}`;
+    const statusLine = isApproved
+      ? `**Application Accepted ${APPROVE_EMOJI}**`
+      : `**Application Rejected ${DENY_EMOJI}**`;
     const guildIcon = message.guild.iconURL({ dynamic: true, size: 256 }) || undefined;
 
     const resultEmbed = createEmbed({
@@ -153,7 +155,12 @@ async function handleApplicationDecision(message) {
         iconURL: guildIcon,
       },
       thumbnail: DARK_THUMBNAIL_URL,
-      description: `${statusText}\n\nصاحب التقديم: <@${targetUser.id}>\nالإداري: <@${message.author.id}>`,
+      description: [
+        statusLine,
+        '',
+        `**Applicant:** <@${targetUser.id}>`,
+        `**Staff Member:** <@${message.author.id}>`,
+      ].join('\n'),
       footer: {
         text: formatDateTime(),
       },
