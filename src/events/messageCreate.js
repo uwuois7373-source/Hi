@@ -24,7 +24,7 @@ import {
 } from '../services/countingGameService.js';
 
 // الرتبة المطلوبة لتفعيل أوامر القبول/الرفض والردود التلقائية
-const REQUIRED_AUTO_REPLY_ROLE_ID = '1414759117087838330';
+const REQUIRED_AUTO_REPLY_ROLE_ID = '1414619238684950662';
 
 // روم استقبال نتائج القبول والرفض
 const APPLICATION_RESULTS_CHANNEL_ID = '1567239474482643044';
@@ -94,6 +94,16 @@ async function resolveTargetApplicant(message) {
   return null;
 }
 
+function formatDateTime(date = new Date()) {
+  const pad = (num) => String(num).padStart(2, '0');
+  const day = pad(date.getDate());
+  const month = pad(date.getMonth() + 1);
+  const year = date.getFullYear();
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
+
 async function handleApplicationDecision(message) {
   try {
     if (!isFeatureEnabled('utility')) {
@@ -128,15 +138,20 @@ async function handleApplicationDecision(message) {
 
     const isApproved = hasApproveKeyword;
     const statusText = isApproved ? 'تم قبول تقديم ✅' : 'تم رفض تقديم ❌';
+    const guildIcon = message.guild.iconURL({ dynamic: true, size: 256 }) || undefined;
+    const userAvatar = targetUser.displayAvatarURL({ dynamic: true, size: 256 }) || guildIcon;
 
     const resultEmbed = createEmbed({
       author: {
         name: message.guild.name,
-        iconURL: message.guild.iconURL({ dynamic: true }) || undefined,
+        iconURL: guildIcon,
       },
+      thumbnail: userAvatar,
       description: `${statusText}\nصاحب التقديم: <@${targetUser.id}>\nالإداري: <@${message.author.id}>`,
+      footer: {
+        text: formatDateTime(),
+      },
       color: 'primary',
-      timestamp: true,
     });
 
     const targetChannel =
@@ -146,7 +161,7 @@ async function handleApplicationDecision(message) {
     if (!targetChannel || !targetChannel.isTextBased()) {
       logger.warn(`Results channel ${APPLICATION_RESULTS_CHANNEL_ID} not found or not text-based.`);
       await message.reply({
-        content: '❌ لم أتمكن من العثور على روم النتائج `1567239474482643044` أو البوت يفتقر لصلاحية الإرسال فيه.',
+        content: `❌ لم أتمكن من العثور على روم النتائج \`${APPLICATION_RESULTS_CHANNEL_ID}\` أو البوت يفتقر لصلاحية الإرسال فيه.`,
         allowedMentions: { repliedUser: false },
       }).catch(() => {});
       return true;
