@@ -29,6 +29,9 @@ const REQUIRED_AUTO_REPLY_ROLE_ID = '1414619238684950662';
 // روم استقبال نتائج القبول والرفض
 const APPLICATION_RESULTS_CHANNEL_ID = '1567239474482643044';
 
+// صورة مصغرة داكنة مطابقة للشكل المطلوب في الإمبد
+const DARK_THUMBNAIL_URL = 'https://dummyimage.com/160x160/1e1f22/1e1f22.png';
+
 const AUTO_REPLIES = [
   {
     triggers: ['خط'],
@@ -139,15 +142,14 @@ async function handleApplicationDecision(message) {
     const isApproved = hasApproveKeyword;
     const statusText = isApproved ? 'تم قبول تقديم ✅' : 'تم رفض تقديم ❌';
     const guildIcon = message.guild.iconURL({ dynamic: true, size: 256 }) || undefined;
-    const userAvatar = targetUser.displayAvatarURL({ dynamic: true, size: 256 }) || guildIcon;
 
     const resultEmbed = createEmbed({
       author: {
         name: message.guild.name,
         iconURL: guildIcon,
       },
-      thumbnail: userAvatar,
-      description: `${statusText}\nصاحب التقديم: <@${targetUser.id}>\nالإداري: <@${message.author.id}>`,
+      thumbnail: DARK_THUMBNAIL_URL,
+      description: `${statusText}\n\nصاحب التقديم: <@${targetUser.id}>\nالإداري: <@${message.author.id}>`,
       footer: {
         text: formatDateTime(),
       },
@@ -171,6 +173,12 @@ async function handleApplicationDecision(message) {
       content: `<@${targetUser.id}>`,
       embeds: [resultEmbed],
       allowedMentions: { users: [targetUser.id] },
+    }).catch(async (err) => {
+      logger.error('Failed to send application result embed:', err);
+      await message.reply({
+        content: '❌ تعذر إرسال النتيجة إلى روم النتائج، تحقق من صلاحيات البوت في الروم.',
+        allowedMentions: { repliedUser: false },
+      }).catch(() => {});
     });
 
     await message.reply({
