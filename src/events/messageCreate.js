@@ -32,6 +32,9 @@ const MEMBER_COUNT_CHANNEL_ID = '1408480160377737319';
 // الرتبة المطلوبة لتفعيل أوامر القبول/الرفض
 const REQUIRED_STAFF_ROLE_ID = '1414619238684950662';
 
+// الرتبة المسموح لها بتلقي رد الرابط التلقائي
+const ALLOWED_LINK_ROLE_ID = '1414759117087838330';
+
 // روم استقبال نتائج القبول والرفض
 const APPLICATION_RESULTS_CHANNEL_ID = '1567239474482643044';
 
@@ -50,15 +53,22 @@ const IGNORED_AUTO_REPLY_USER_IDS = new Set([
 // قائمة الردود التلقائية
 const AUTO_REPLIES = [
   {
+    triggers: ['رابط'],
+    reply: 'ضع_رابط_السيرفر_هنا', // <-- ضع رابط السيرفر هنا
+    exact: true, // يرد فقط إذا كتب الشخص كلمة "رابط" وحدها
+    useEmbed: false,
+    requiredRoleId: ALLOWED_LINK_ROLE_ID, // يشترط امتلاك الرتبة المحددة
+  },
+  {
     triggers: ['fayt'],
     reply: 'pr.sampdroid.app:7777',
-    exact: false,
+    exact: true,
     useEmbed: false,
   },
   {
     triggers: ['ip'],
     reply: '144.217.62.159:7777',
-    exact: false,
+    exact: true,
     useEmbed: false,
   },
   {
@@ -91,7 +101,7 @@ https://discord.com/channels/1343103634761715755/1536436773020897311
 
  ** نتشرفو بخدمتكم، ونتمنّاو نكونو عند حسن ظنكم دائمًا. 🤍 **
 ****@everyone****`,
-    exact: false,
+    exact: true,
     useEmbed: false,
   },
 ];
@@ -326,6 +336,13 @@ async function handleAutoReply(message) {
     const normalizedContent = rawContent.toLowerCase();
 
     for (const item of AUTO_REPLIES) {
+      if (item.requiredRoleId) {
+        const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+        if (!member || !member.roles.cache.has(item.requiredRoleId)) {
+          continue;
+        }
+      }
+
       const matched = item.triggers.some((trigger) => {
         const cleanTrigger = String(trigger).trim().toLowerCase();
         if (!cleanTrigger) return false;
