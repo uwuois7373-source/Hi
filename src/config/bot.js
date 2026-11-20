@@ -8,6 +8,10 @@ export const botConfig = {
         name: "dms for support",
         type: 2,
       },
+      {
+        name: "Cryot",
+        type: 2,
+      },
     ],
   },
 
@@ -226,4 +230,205 @@ export const botConfig = {
         name: "🤖 Bots",
         description: "Total bot accounts in the server",
         getCount: (guild) =>
-          guild.members.cache.
+          guild.members.cache.filter((m) => m.user.bot).size.toString(),
+      },
+      members_only: {
+        name: "👤 Humans",
+        description: "Total human members (non-bots)",
+        getCount: (guild) =>
+          guild.members.cache.filter((m) => !m.user.bot).size.toString(),
+      },
+    },
+  },
+
+  messages: {
+    noPermission: "You do not have permission to use this command.",
+    cooldownActive: "Please wait {time} before using this command again.",
+    errorOccurred: "An error occurred while executing this command.",
+    missingPermissions:
+      "I am missing required permissions to perform this action.",
+    commandDisabled: "This command has been disabled.",
+    maintenanceMode: "The bot is currently in maintenance mode.",
+  },
+
+  features: {
+    economy: true,
+    leveling: true,
+    moderation: true,
+    logging: true,
+    welcome: true,
+    tickets: true,
+    giveaways: true,
+    birthday: true,
+    counter: true,
+    verification: true,
+    reactionRoles: true,
+    joinToCreate: true,
+    voice: true,
+    search: true,
+    tools: true,
+    utility: true,
+    community: true,
+    fun: true,
+    music: true,
+  },
+};
+
+export function validateConfig(config) {
+  const errors = [];
+
+  if (!process.env.DISCORD_TOKEN && !process.env.TOKEN) {
+    errors.push("Bot token is required (DISCORD_TOKEN or TOKEN environment variable)");
+  }
+
+  if (!process.env.CLIENT_ID) {
+    errors.push("Client ID is required (CLIENT_ID environment variable)");
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    const hasConnectionUrl = Boolean(process.env.POSTGRES_URL || process.env.DATABASE_URL);
+
+    if (!hasConnectionUrl) {
+      if (!process.env.POSTGRES_HOST) {
+        errors.push("PostgreSQL connection is required in production (set DATABASE_URL/POSTGRES_URL, or POSTGRES_HOST)");
+      }
+      if (!process.env.POSTGRES_USER) {
+        errors.push("PostgreSQL user is required in production (set DATABASE_URL/POSTGRES_URL, or POSTGRES_USER)");
+      }
+      if (!process.env.POSTGRES_PASSWORD) {
+        errors.push("PostgreSQL password is required in production (set DATABASE_URL/POSTGRES_URL, or POSTGRES_PASSWORD)");
+      }
+    }
+  }
+
+  return errors;
+}
+
+const configErrors = validateConfig(botConfig);
+if (configErrors.length > 0) {
+  logger.error("Bot configuration errors:", configErrors.join("\n"));
+  if (process.env.NODE_ENV === "production") {
+    process.exit(1);
+  }
+}
+
+export const BotConfig = botConfig;
+
+const COMMAND_CATEGORY_FEATURE_MAP = {
+  birthday: "birthday",
+  community: "community",
+  economy: "economy",
+  fun: "fun",
+  giveaway: "giveaways",
+  jointocreate: "joinToCreate",
+  leveling: "leveling",
+  logging: "logging",
+  moderation: "moderation",
+  music: "music",
+  reaction_roles: "reactionRoles",
+  search: "search",
+  serverstats: "counter",
+  ticket: "tickets",
+  tools: "tools",
+  utility: "utility",
+  verification: "verification",
+  welcome: "welcome",
+};
+
+function normalizeCategoryKey(category) {
+  return String(category || "").trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+export function getCommandPrefix() {
+  return botConfig.commands?.prefix ?? "!";
+}
+
+export function getBotOwners() {
+  return (botConfig.commands?.owners ?? [])
+    .map((id) => String(id).trim())
+    .filter(Boolean);
+}
+
+export function isBotOwner(userId) {
+  if (!userId) {
+    return false;
+  }
+
+  return getBotOwners().includes(String(userId));
+}
+
+export function isMaintenanceMode() {
+  return botConfig.commands?.maintenanceMode === true;
+}
+
+export function getBotMessage(key, replacements = {}) {
+  let message = botConfig.messages?.[key] || key;
+
+  for (const [placeholder, value] of Object.entries(replacements)) {
+    message = message.replace(new RegExp(`\\{${placeholder}\\}`, "g"), String(value));
+  }
+
+  return message;
+}
+
+export function isFeatureEnabled(featureKey) {
+  if (!featureKey) {
+    return true;
+  }
+
+  return botConfig.features?.[featureKey] !== false;
+}
+
+export function isCommandCategoryEnabled(category) {
+  const normalized = normalizeCategoryKey(category);
+
+  if (!normalized || normalized === "core") {
+    return true;
+  }
+
+  const featureKey = COMMAND_CATEGORY_FEATURE_MAP[normalized];
+  if (!featureKey) {
+    return true;
+  }
+
+  return isFeatureEnabled(featureKey);
+}
+
+export function getApplicationStatusColor(status) {
+  const colors = botConfig.applications?.statusColors || {};
+  const hex = colors[status];
+  return hex ? getColor(hex) : getColor(status === "approved" ? "success" : status === "denied" ? "error" : "warning");
+}
+
+export function getDefaultApplicationQuestions() {
+  return (botConfig.applications?.defaultQuestions || []).map((entry) =>
+    typeof entry === "string" ? entry : entry.question,
+  ).filter(Boolean);
+}
+
+export function getColor(path, fallback = "#99AAB5") {
+  if (typeof path === "number") return path;
+  if (typeof path === "string" && path.startsWith("#")) {
+    return parseInt(path.replace("#", ""), 16);
+  }
+  const result = path
+    .split(".")
+    .reduce(
+      (obj, key) => (obj && obj[key] !== undefined ? obj[key] : fallback),
+      botConfig.embeds.colors,
+    );
+
+  if (typeof result === "string" && result.startsWith("#")) {
+    return parseInt(result.replace("#", ""), 16);
+  }
+  return result;
+}
+
+export function getRandomColor() {
+  const colors = Object.values(botConfig.embeds.colors).flatMap((color) =>
+    typeof color === "string" ? color : Object.values(color),
+  );
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
+export default botConfig;
