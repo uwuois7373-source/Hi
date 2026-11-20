@@ -23,8 +23,14 @@ import {
   recordCorrectCount,
 } from '../services/countingGameService.js';
 
-// الرتبة المطلوبة لتفعيل أوامر القبول/الرفض والردود التلقائية
-const REQUIRED_AUTO_REPLY_ROLE_ID = '1414619238684950662';
+// روم ممنوع البوت يكتب أو يرسل فيه أي شيء
+const BLOCKED_BOT_CHANNEL_ID = '1391737678369919138';
+
+// روم عرض عدد أعضاء السيرفر في اسمه
+const MEMBER_COUNT_CHANNEL_ID = '1408480160377737319';
+
+// الرتبة المطلوبة لتفعيل أوامر القبول/الرفض
+const REQUIRED_STAFF_ROLE_ID = '1414619238684950662';
 
 // روم استقبال نتائج القبول والرفض
 const APPLICATION_RESULTS_CHANNEL_ID = '1567239474482643044';
@@ -36,21 +42,110 @@ const DENY_EMOJI = '<:emoji_13:1519524319556796436>';
 // صورة مصغرة داكنة مطابقة للشكل المطلوب في الإمبد
 const DARK_THUMBNAIL_URL = 'https://dummyimage.com/160x160/1e1f22/1e1f22.png';
 
+// مستخدمون مستثنون من الردود التلقائية
+const IGNORED_AUTO_REPLY_USER_IDS = new Set([
+  '1436475409267949678',
+]);
+
+// قائمة الردود التلقائية
 const AUTO_REPLIES = [
   {
-    triggers: ['خط'],
-    reply: `https://cdn.discordapp.com/attachments/1399176418415607870/1468651951339339796/1339174610775703626.gif?ex=6b0124f7&is=6affd377&hm=2403d860306f5127772df1d0106e2bed5a2630f8225bebf2830d38ad7ae4d71f&`,
+    triggers: ['fayt'],
+    reply: 'pr.sampdroid.app:7777',
     exact: false,
     useEmbed: false,
   },
   {
-    triggers: ['رابط'],
-    reply: `𝐃𝐙  𝐓𝐎𝐏  | 𝐌𝐎𝐃𝐒  2𝐊
-https://discord.gg/CdGddfWQZq`,
+    triggers: ['ip'],
+    reply: '144.217.62.159:7777',
+    exact: false,
+    useEmbed: false,
+  },
+  {
+    triggers: ['partnar', 'partner'],
+    reply: `**وي خوتي لعزاز 🤍 **
+
+**أي واحد حاب يدير **Partnership** مع سيرفرو، يقدر يفتح **Ticket** بكل سهولة، ويشوف الشروط الموجودة هنا:**
+
+https://discord.com/channels/1343103634761715755/1536436773020897311
+**وبالنسبة   للي حاب يدير **Advertisement** لسيرفرو، هاذي هي الأسعار:**
+
+
+ **قائمة الأسعار:**
+
+ **يومين:** 10 آلاف دج  20M Credit
+
+
+**4 أيام:** 20 ألف دج  40M Credit
+
+ **6 أيام:** 50 ألف دج  80M Credit
+
+ **8 أيام:** 80 ألف دج  100M Crediti
+
+**10 أيام:** 100 ألف دج 120M Credit 
+
+**للحجز أو الاستفسار:**
+
+**تواصل معنا في الخاص أو افتح **
+
+
+ ** نتشرفو بخدمتكم، ونتمنّاو نكونو عند حسن ظنكم دائمًا. 🤍 **
+****@everyone****`,
     exact: false,
     useEmbed: false,
   },
 ];
+
+const MEMBER_COUNT_UPDATE_COOLDOWN_MS = 6 * 60 * 1000;
+const lastMemberCountUpdateByGuild = new Map();
+
+function isBlockedBotChannel(channelId) {
+  return channelId === BLOCKED_BOT_CHANNEL_ID;
+}
+
+async function safeSendToChannel(channel, payload) {
+  if (!channel || !channel.isTextBased() || isBlockedBotChannel(channel.id)) {
+    return null;
+  }
+  return channel.send(payload);
+}
+
+async function safeReplyToMessage(message, payload) {
+  if (!message || isBlockedBotChannel(message.channel?.id)) {
+    return null;
+  }
+  return message.reply(payload);
+}
+
+async function syncServerMemberCountChannel(guild) {
+  try {
+    if (!guild || !MEMBER_COUNT_CHANNEL_ID) return;
+
+    const now = Date.now();
+    const lastUpdated = lastMemberCountUpdateByGuild.get(guild.id) || 0;
+    if (now - lastUpdated < MEMBER_COUNT_UPDATE_COOLDOWN_MS) {
+      return;
+    }
+
+    const counterChannel =
+      guild.channels.cache.get(MEMBER_COUNT_CHANNEL_ID) ||
+      await guild.channels.fetch(MEMBER_COUNT_CHANNEL_ID).catch(() => null);
+
+    if (!counterChannel) return;
+
+    const totalMembers = guild.memberCount || guild.members.cache.size;
+    const desiredName = `Members: ${totalMembers}`;
+
+    if (counterChannel.name !== desiredName) {
+      lastMemberCountUpdateByGuild.set(guild.id, now);
+      await counterChannel.setName(desiredName).catch((err) => {
+        logger.error('Failed to update member count channel name:', err);
+      });
+    }
+  } catch (error) {
+    logger.error('Error syncing server member count channel:', error);
+  }
+}
 
 export default {
   name: Events.MessageCreate,
@@ -59,6 +154,12 @@ export default {
       if (message.author.bot || !message.guild) return;
 
       logger.debug(`Message received from ${message.author.tag}: ${message.content}`);
+
+      await syncServerMemberCountChannel(message.guild);
+
+      if (isBlockedBotChannel(message.channel.id)) {
+        return;
+      }
 
       const countingProcessed = await handleCountingGame(message, client);
       if (countingProcessed) {
@@ -118,7 +219,7 @@ async function handleApplicationDecision(message) {
     }
 
     const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
-    if (!member || !member.roles.cache.has(REQUIRED_AUTO_REPLY_ROLE_ID)) {
+    if (!member || !member.roles.cache.has(REQUIRED_STAFF_ROLE_ID)) {
       return false;
     }
 
@@ -136,10 +237,10 @@ async function handleApplicationDecision(message) {
 
     const targetUser = await resolveTargetApplicant(message);
     if (!targetUser) {
-      await message.reply({
+      await safeReplyToMessage(message, {
         content: '⚠️ يرجى منشن العضو أو الرد على رسالته عند كتابة `قبول` أو `رفض`.',
         allowedMentions: { repliedUser: false },
-      }).catch(() => {});
+      })?.catch(() => {});
       return true;
     }
 
@@ -172,33 +273,33 @@ async function handleApplicationDecision(message) {
       message.guild.channels.cache.get(APPLICATION_RESULTS_CHANNEL_ID) ||
       await message.guild.channels.fetch(APPLICATION_RESULTS_CHANNEL_ID).catch(() => null);
 
-    if (!targetChannel || !targetChannel.isTextBased()) {
-      logger.warn(`Results channel ${APPLICATION_RESULTS_CHANNEL_ID} not found or not text-based.`);
-      await message.reply({
+    if (!targetChannel || !targetChannel.isTextBased() || isBlockedBotChannel(targetChannel.id)) {
+      logger.warn(`Results channel ${APPLICATION_RESULTS_CHANNEL_ID} not found, blocked, or not text-based.`);
+      await safeReplyToMessage(message, {
         content: `❌ لم أتمكن من العثور على روم النتائج \`${APPLICATION_RESULTS_CHANNEL_ID}\` أو البوت يفتقر لصلاحية الإرسال فيه.`,
         allowedMentions: { repliedUser: false },
-      }).catch(() => {});
+      })?.catch(() => {});
       return true;
     }
 
-    await targetChannel.send({
+    await safeSendToChannel(targetChannel, {
       content: `<@${targetUser.id}>`,
       embeds: [resultEmbed],
       allowedMentions: { users: [targetUser.id] },
-    }).catch(async (err) => {
+    })?.catch(async (err) => {
       logger.error('Failed to send application result embed:', err);
-      await message.reply({
+      await safeReplyToMessage(message, {
         content: '❌ تعذر إرسال النتيجة إلى روم النتائج، تحقق من صلاحيات البوت في الروم.',
         allowedMentions: { repliedUser: false },
-      }).catch(() => {});
+      })?.catch(() => {});
     });
 
-    await message.reply({
+    await safeReplyToMessage(message, {
       content: isApproved
         ? `تم قبول التقديم بنجاح وإرسال النتيجة إلى <#${APPLICATION_RESULTS_CHANNEL_ID}>.`
         : `تم رفض التقديم بنجاح وإرسال النتيجة إلى <#${APPLICATION_RESULTS_CHANNEL_ID}>.`,
       allowedMentions: { repliedUser: false },
-    }).catch(() => {});
+    })?.catch(() => {});
 
     return true;
   } catch (error) {
@@ -213,8 +314,7 @@ async function handleAutoReply(message) {
       return;
     }
 
-    const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
-    if (!member || !member.roles.cache.has(REQUIRED_AUTO_REPLY_ROLE_ID)) {
+    if (IGNORED_AUTO_REPLY_USER_IDS.has(message.author.id)) {
       return;
     }
 
@@ -239,7 +339,7 @@ async function handleAutoReply(message) {
       }
 
       if (item.useEmbed) {
-        await message.reply({
+        await safeReplyToMessage(message, {
           embeds: [
             createEmbed({
               title: item.title || 'Auto Reply',
@@ -248,12 +348,12 @@ async function handleAutoReply(message) {
             }),
           ],
           allowedMentions: { repliedUser: false },
-        }).catch(() => {});
+        })?.catch(() => {});
       } else {
-        await message.reply({
+        await safeReplyToMessage(message, {
           content: item.reply,
-          allowedMentions: { repliedUser: false, parse: ['users'] },
-        }).catch(() => {});
+          allowedMentions: { repliedUser: false, parse: [] },
+        })?.catch(() => {});
       }
 
       break;
@@ -293,24 +393,24 @@ async function handlePrefixCommand(message, client) {
     }
 
     if (isMaintenanceMode() && !isBotOwner(message.author.id)) {
-      await message.channel.send({
+      await safeSendToChannel(message.channel, {
         embeds: [createEmbed({
           title: 'Maintenance Mode',
           description: getBotMessage('maintenanceMode'),
           color: 'warning',
         })],
-      }).catch(() => {});
+      })?.catch(() => {});
       return true;
     }
 
     if (!isCommandCategoryEnabled(command.category)) {
-      await message.channel.send({
+      await safeSendToChannel(message.channel, {
         embeds: [createEmbed({
           title: 'Feature Disabled',
           description: getBotMessage('commandDisabled'),
           color: 'error',
         })],
-      }).catch(() => {});
+      })?.catch(() => {});
       return true;
     }
 
@@ -322,7 +422,7 @@ async function handlePrefixCommand(message, client) {
           description: `${restriction.reason}\nUse \`/${resolvedCommandName}\` instead.`,
           color: 'info',
         });
-        await message.channel.send({ embeds: [embed] }).catch(() => {});
+        await safeSendToChannel(message.channel, { embeds: [embed] })?.catch(() => {});
       }
       return true;
     }
@@ -333,7 +433,7 @@ async function handlePrefixCommand(message, client) {
         description: 'This command has been disabled for this server.',
         color: 'error',
       });
-      await message.channel.send({ embeds: [embed] }).catch(() => {});
+      await safeSendToChannel(message.channel, { embeds: [embed] })?.catch(() => {});
       return true;
     }
 
@@ -353,7 +453,7 @@ async function handlePrefixCommand(message, client) {
         description: `This command is on cooldown. Please wait ${formattedCooldown} before trying again.`,
         color: 'error',
       });
-      await message.channel.send({ embeds: [embed] }).catch(() => {});
+      await safeSendToChannel(message.channel, { embeds: [embed] })?.catch(() => {});
       return true;
     }
 
@@ -387,10 +487,15 @@ async function handleCountingGame(message, client) {
         currentStreak: 0,
       });
 
-      const failureMessage = await message.channel.send(`❌ Count broken by <@${message.author.id}>. The sequence has been reset to **1**.`);
-      setTimeout(() => {
-        failureMessage.delete().catch(() => {});
-      }, 10000);
+      const failureMessage = await safeSendToChannel(
+        message.channel,
+        `❌ Count broken by <@${message.author.id}>. The sequence has been reset to **1**.`,
+      );
+      if (failureMessage) {
+        setTimeout(() => {
+          failureMessage.delete().catch(() => {});
+        }, 10000);
+      }
 
       return true;
     }
