@@ -8,7 +8,14 @@ import { supportsPrefixExecution, executePrefixCommand, resolvePrefixAccessKey }
 import { resolveCommandAlias, resolveSubcommandAlias } from '../config/commands/commandAliases.js';
 import { getPrefixRestriction } from '../config/commands/prefixRestrictions.js';
 import { getGuildConfig } from '../services/config/guildConfig.js';
-import { getCommandPrefix, getBotMessage, isBotOwner, isCommandCategoryEnabled, isMaintenanceMode } from '../config/bot.js';
+import {
+  getCommandPrefix,
+  getBotMessage,
+  isBotOwner,
+  isCommandCategoryEnabled,
+  isMaintenanceMode,
+  isFeatureEnabled,
+} from '../config/bot.js';
 import { enforceAbuseProtection, formatCooldownDuration } from '../utils/abuseProtection.js';
 import { createEmbed } from '../utils/embeds.js';
 import { isCommandEnabled } from '../services/commandAccessService.js';
@@ -21,6 +28,28 @@ import {
 
 const MESSAGE_XP_RATE_LIMIT_ATTEMPTS = 12;
 const MESSAGE_XP_RATE_LIMIT_WINDOW_MS = 10000;
+
+// الرتبة المطلوبة لتفعيل الردود وأوامر القبول/الرفض
+const REQUIRED_AUTO_REPLY_ROLE_ID = '1391735874924052560';
+
+// روم استقبال نتائج القبول والرفض
+const APPLICATION_RESULTS_CHANNEL_ID = '1414751141706731691';
+
+const AUTO_REPLIES = [
+  {
+    triggers: ['خط'],
+    reply: `https://cdn.discordapp.com/attachments/1399176418415607870/1468651951339339796/1339174610775703626.gif?ex=6b0124f7&is=6affd377&hm=2403d860306f5127772df1d0106e2bed5a2630f8225bebf2830d38ad7ae4d71f&`,
+    exact: false,
+    useEmbed: false,
+  },
+  {
+    triggers: ['رابط'],
+    reply: `𝐃𝐙  𝐓𝐎𝐏  | 𝐌𝐎𝐃𝐒  2𝐊
+https://discord.gg/CdGddfWQZq`,
+    exact: false,
+    useEmbed: false,
+  },
+];
 
 export default {
   name: Events.MessageCreate,
@@ -35,7 +64,13 @@ export default {
         return;
       }
 
-      await handlePrefixCommand(message, client);
+      const prefixProcessed = await handlePrefixCommand(message, client);
+      if (!prefixProcessed) {
+        const handledDecision = await handleApplicationDecision(message);
+        if (!handledDecision) {
+          await handleAutoReply(message);
+        }
+      }
 
       await handleLeveling(message, client);
     } catch (error) {
@@ -44,6 +79,134 @@ export default {
   }
 };
 
+async function handleApplicationDecision(message) {
+  try {
+    if (!isFeatureEnabled('utility')) {
+      return false;
+    }
+
+    const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+    if (!member || !member.roles.cache.has(REQUIRED_AUTO_REPLY_ROLE_ID)) {
+      return false;
+    }
+
+    const rawContent = message.content?.trim();
+    if (!rawContent) {
+      return false;
+    }
+
+    const hasApproveKeyword = /(^|\s)تفضل(\s|$)/u.test(rawContent);
+    const hasDenyKeyword = /(^|\s)رفض(\s|$)/u.test(rawContent);
+
+    if (!hasApproveKeyword && !hasDenyKeyword) {
+      return false;
+    }
+
+    const mentionedUser =
+      message.mentions.users.first() ||
+      message.reference?.messageId
+        ? (await message.channel.messages.fetch(message.reference.messageId).catch(() => null))?.author || null
+        : null;
+
+    if (!mentionedUser) {
+      return false;
+    }
+
+    const isApproved = hasApproveKeyword;
+    const statusText = isApproved ? 'تم قبول تقديم ✅' : 'تم رفض تقديم ❌';
+
+    const resultEmbed = createEmbed({
+      author: {
+        name: message.guild.name,
+        iconURL: message.guild.iconURL({ dynamic: true }) || undefined,
+      },
+      description: `${statusText}\nصاحب التقديم: <@${mentionedUser.id}>\nالإداري: <@${message.author.id}>`,
+      color: 'primary',
+      timestamp: true,
+    });
+
+    const targetChannel =
+      message.guild.channels.cache.get(APPLICATION_RESULTS_CHANNEL_ID) ||
+      await message.guild.channels.fetch(APPLICATION_RESULTS_CHANNEL_ID).catch(() => null);
+
+    if (targetChannel && targetChannel.isTextBased()) {
+      await targetChannel.send({
+        content: `<@${mentionedUser.id}>`,
+        embeds: [resultEmbed],
+        allowedMentions: { users: [mentionedUser.id] },
+      }).catch(() => {});
+    }
+
+    await message.reply({
+      content: isApproved
+        ? `تم قبول التقديم بنجاح وإرسال النتيجة إلى روم النتائج.`
+        : `تم رفض التقديم بنجاح وإرسال النتيجة إلى روم النتائج.`,
+      allowedMentions: { repliedUser: false },
+    }).catch(() => {});
+
+    return true;
+  } catch (error) {
+    logger.error('Error handling application decision:', error);
+    return false;
+  }
+}
+
+async function handleAutoReply(message) {
+  try {
+    if (!isFeatureEnabled('utility')) {
+      return;
+    }
+
+    const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+    if (!member || !member.roles.cache.has(REQUIRED_AUTO_REPLY_ROLE_ID)) {
+      return;
+    }
+
+    const rawContent = message.content?.trim();
+    if (!rawContent) {
+      return;
+    }
+
+    const normalizedContent = rawContent.toLowerCase();
+
+    for (const item of AUTO_REPLIES) {
+      const matched = item.triggers.some((trigger) => {
+        const cleanTrigger = String(trigger).trim().toLowerCase();
+        if (!cleanTrigger) return false;
+        return item.exact
+          ? normalizedContent === cleanTrigger
+          : normalizedContent.includes(cleanTrigger);
+      });
+
+      if (!matched) {
+        continue;
+      }
+
+      if (item.useEmbed) {
+        await message.reply({
+          embeds: [
+            createEmbed({
+              title: item.title || 'Auto Reply',
+              description: item.reply,
+              color: 'primary',
+            }),
+          ],
+          allowedMentions: { repliedUser: false },
+        }).catch(() => {});
+      } else {
+        await message.reply({
+          content: item.reply,
+          allowedMentions: { repliedUser: false, parse: ['users'] },
+        }).catch(() => {});
+      }
+
+      break;
+    }
+  } catch (error) {
+    logger.error('Error handling auto-reply:', error);
+  }
+}
+
 async function handlePrefixCommand(message, client) {
   try {
     const guildConfig = await getGuildConfig(client, message.guild.id);
@@ -51,7 +214,7 @@ async function handlePrefixCommand(message, client) {
     const parsed = parsePrefixCommand(message.content, prefix);
     
     if (!parsed) {
-      return; 
+      return false; 
     }
 
     let { commandName, args } = parsed;
@@ -70,7 +233,7 @@ async function handlePrefixCommand(message, client) {
 
     if (!command) {
       logger.warn(`Command not found: ${resolvedCommandName}`);
-      return; 
+      return true; 
     }
 
     if (isMaintenanceMode() && !isBotOwner(message.author.id)) {
@@ -81,7 +244,7 @@ async function handlePrefixCommand(message, client) {
           color: 'warning',
         })],
       }).catch(() => {});
-      return;
+      return true;
     }
 
     if (!isCommandCategoryEnabled(command.category)) {
@@ -92,7 +255,7 @@ async function handlePrefixCommand(message, client) {
           color: 'error',
         })],
       }).catch(() => {});
-      return;
+      return true;
     }
 
     const restriction = getPrefixRestriction(command, args, resolveSubcommandAlias);
@@ -105,7 +268,7 @@ async function handlePrefixCommand(message, client) {
         });
         await message.channel.send({ embeds: [embed] }).catch(() => {});
       }
-      return;
+      return true;
     }
 
     if (!(await isCommandEnabled(client, message.guild.id, resolvePrefixAccessKey(command.data, args), command.category))) {
@@ -115,7 +278,7 @@ async function handlePrefixCommand(message, client) {
         color: 'error',
       });
       await message.channel.send({ embeds: [embed] }).catch(() => {});
-      return;
+      return true;
     }
 
     const mockInteractionForProtection = {
@@ -135,14 +298,16 @@ async function handlePrefixCommand(message, client) {
         color: 'error',
       });
       await message.channel.send({ embeds: [embed] }).catch(() => {});
-      return;
+      return true;
     }
 
     logger.info(`Executing prefix command: ${prefix}${commandName} (resolved to ${resolvedCommandName}) by ${message.author.tag}`);
     
     await executePrefixCommand(command, message, args, client, prefix, guildConfig);
+    return true;
   } catch (error) {
     logger.error('Error handling prefix command:', error);
+    return false;
   }
 }
 
