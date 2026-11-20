@@ -120,7 +120,7 @@ async function handleApplicationDecision(message) {
       return false;
     }
 
-    const hasApproveKeyword = /(^|\s)تفضل(\s|$)/u.test(rawContent);
+    const hasApproveKeyword = /(^|\s)قبول(\s|$)/u.test(rawContent);
     const hasDenyKeyword = /(^|\s)رفض(\s|$)/u.test(rawContent);
 
     if (!hasApproveKeyword && !hasDenyKeyword) {
@@ -130,7 +130,7 @@ async function handleApplicationDecision(message) {
     const targetUser = await resolveTargetApplicant(message);
     if (!targetUser) {
       await message.reply({
-        content: '⚠️ يرجى منشن العضو أو الرد على رسالته عند كتابة `تفضل` أو `رفض`.',
+        content: '⚠️ يرجى منشن العضو أو الرد على رسالته عند كتابة `قبول` أو `رفض`.',
         allowedMentions: { repliedUser: false },
       }).catch(() => {});
       return true;
