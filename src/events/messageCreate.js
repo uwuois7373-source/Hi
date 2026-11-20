@@ -29,6 +29,10 @@ const REQUIRED_AUTO_REPLY_ROLE_ID = '1414619238684950662';
 // روم استقبال نتائج القبول والرفض
 const APPLICATION_RESULTS_CHANNEL_ID = '1567239474482643044';
 
+// إيموجيات القبول والرفض المخصصة
+const APPROVE_EMOJI = '<:emoji_12:1519524315194982585>';
+const DENY_EMOJI = '<:emoji_13:1519524319556796436>';
+
 // صورة مصغرة داكنة مطابقة للشكل المطلوب في الإمبد
 const DARK_THUMBNAIL_URL = 'https://dummyimage.com/160x160/1e1f22/1e1f22.png';
 
@@ -140,7 +144,7 @@ async function handleApplicationDecision(message) {
     }
 
     const isApproved = hasApproveKeyword;
-    const statusText = isApproved ? 'تم قبول تقديم ✅' : 'تم رفض تقديم ❌';
+    const statusText = isApproved ? `تم قبول تقديم ${APPROVE_EMOJI}` : `تم رفض تقديم ${DENY_EMOJI}`;
     const guildIcon = message.guild.iconURL({ dynamic: true, size: 256 }) || undefined;
 
     const resultEmbed = createEmbed({
