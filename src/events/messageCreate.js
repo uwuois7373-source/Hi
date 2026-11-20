@@ -145,9 +145,10 @@ async function handleApplicationDecision(message) {
 
     const isApproved = hasApproveKeyword;
     const statusLine = isApproved
-      ? `**Application Accepted ${APPROVE_EMOJI}**`
-      : `**Application Rejected ${DENY_EMOJI}**`;
+      ? `**𝐀𝐩𝐩𝐥𝐢𝐜𝐚𝐭𝐢𝐨𝐧 𝐀𝐜𝐜𝐞𝐩𝐭𝐞𝐝 ${APPROVE_EMOJI}**`
+      : `**𝐀𝐩𝐩𝐥𝐢𝐜𝐚𝐭𝐢𝐨𝐧 𝐑𝐞𝐣𝐞𝐜𝐭𝐞𝐝 ${DENY_EMOJI}**`;
     const guildIcon = message.guild.iconURL({ dynamic: true, size: 256 }) || undefined;
+    const completedAt = formatDateTime();
 
     const resultEmbed = createEmbed({
       author: {
@@ -158,11 +159,11 @@ async function handleApplicationDecision(message) {
       description: [
         statusLine,
         '',
-        `**Applicant:** <@${targetUser.id}>`,
-        `**Staff Member:** <@${message.author.id}>`,
+        `**𝐀𝐩𝐩𝐥𝐢𝐜𝐚𝐧𝐭:** <@${targetUser.id}>`,
+        `**𝐒𝐭𝐚𝐟𝐟:** <@${message.author.id}>`,
       ].join('\n'),
       footer: {
-        text: formatDateTime(),
+        text: completedAt,
       },
       color: 'primary',
     });
