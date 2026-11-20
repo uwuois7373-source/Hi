@@ -29,53 +29,30 @@ import {
 const MESSAGE_XP_RATE_LIMIT_ATTEMPTS = 12;
 const MESSAGE_XP_RATE_LIMIT_WINDOW_MS = 10000;
 
-const IGNORED_AUTO_REPLY_USER_IDS = new Set([
-  '1436475409267949678',
-]);
+// الرتبة المطلوبة لتفعيل الردود التلقائية
+const REQUIRED_AUTO_REPLY_ROLE_ID = '1391735874924052560';
 
 const AUTO_REPLIES = [
   {
-    triggers: ['fayt'],
-    reply: 'pr.sampdroid.app:7777',
+    triggers: ['تفضل'],
+    reply: `> **السلام عليڪم**
+> **هـنـا طـاقـم عمـل**
+
+> **معـڪ الـعضو <@1382453552081010709> ڪيف يمكـنـني خدمتك :**
+https://cdn.discordapp.com/attachments/1399176418415607870/1468651951339339796/1339174610775703626.gif?ex=6984cc37&is=69837ab7&hm=72ae6401246f68cb693b3517d083d6d3ffcfc00ff35d561f5c7628cf48469052&`,
     exact: false,
     useEmbed: false,
   },
   {
-    triggers: ['ip'],
-    reply: '144.217.62.159:7777',
+    triggers: ['خط'],
+    reply: `https://cdn.discordapp.com/attachments/1399176418415607870/1468651951339339796/1339174610775703626.gif?ex=6b0124f7&is=6affd377&hm=2403d860306f5127772df1d0106e2bed5a2630f8225bebf2830d38ad7ae4d71f&`,
     exact: false,
     useEmbed: false,
   },
   {
-    triggers: ['partnar', 'partner'],
-    reply: `**وي خوتي لعزاز 🤍 **
-
-**أي واحد حاب يدير **Partnership** مع سيرفرو، يقدر يفتح **Ticket** بكل سهولة، ويشوف الشروط الموجودة هنا:**
-
-https://discord.com/channels/1343103634761715755/1536436773020897311
-**وبالنسبة   للي حاب يدير **Advertisement** لسيرفرو، هاذي هي الأسعار:**
-
-
- **قائمة الأسعار:**
-
- **يومين:** 10 آلاف دج  20M Credit
-
-
-**4 أيام:** 20 ألف دج  40M Credit
-
- **6 أيام:** 50 ألف دج  80M Credit
-
- **8 أيام:** 80 ألف دج  100M Crediti
-
-**10 أيام:** 100 ألف دج 120M Credit 
-
-**للحجز أو الاستفسار:**
-
-**تواصل معنا في الخاص أو افتح **
-
-
- ** نتشرفو بخدمتكم، ونتمنّاو نكونو عند حسن ظنكم دائمًا. 🤍 **
-****@everyone****`,
+    triggers: ['رابط'],
+    reply: `𝐃𝐙  𝐓𝐎𝐏  | 𝐌𝐎𝐃𝐒  2𝐊
+https://discord.gg/CdGddfWQZq`,
     exact: false,
     useEmbed: false,
   },
@@ -112,7 +89,8 @@ async function handleAutoReply(message) {
       return;
     }
 
-    if (IGNORED_AUTO_REPLY_USER_IDS.has(message.author.id)) {
+    const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+    if (!member || !member.roles.cache.has(REQUIRED_AUTO_REPLY_ROLE_ID)) {
       return;
     }
 
@@ -150,7 +128,7 @@ async function handleAutoReply(message) {
       } else {
         await message.reply({
           content: item.reply,
-          allowedMentions: { repliedUser: false, parse: [] },
+          allowedMentions: { repliedUser: false, parse: ['users'] },
         }).catch(() => {});
       }
 
