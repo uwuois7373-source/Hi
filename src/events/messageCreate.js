@@ -108,7 +108,7 @@ function formatDateTime(date = new Date()) {
   const year = date.getFullYear();
   const hours = pad(date.getHours());
   const minutes = pad(date.getMinutes());
-  return `${day}/${month}/${year} ${hours}:${minutes}`;
+  return `${day}/${month}/${year} • ${hours}:${minutes}`;
 }
 
 async function handleApplicationDecision(message) {
@@ -163,7 +163,7 @@ async function handleApplicationDecision(message) {
         `**𝐒𝐭𝐚𝐟𝐟:** <@${message.author.id}>`,
       ].join('\n'),
       footer: {
-        text: completedAt,
+        text: `𝐂𝐨𝐦𝐩𝐥𝐞𝐭𝐞𝐝 • ${completedAt}`,
       },
       color: 'primary',
     });
